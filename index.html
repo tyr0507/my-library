@@ -51,6 +51,22 @@
         <input id="searchInput" type="search" placeholder="搜尋作品、簡介、標籤或正文…">
         <select id="sortSelect" aria-label="排序方式"><option value="updated">最近更新</option><option value="title">作品名稱</option><option value="words">字數由多到少</option></select>
         <div class="view-switch"><button class="selected" data-view="grid">封面</button><button data-view="list">清單</button></div>
+        <div class="backup-actions">
+  <button class="secondary-button" id="exportBackup">
+    ↓ 匯出備份
+  </button>
+
+  <button class="secondary-button" id="importBackupButton">
+    ↑ 匯入備份
+  </button>
+
+  <input
+    type="file"
+    id="importBackupInput"
+    accept=".json,application/json"
+    hidden
+  >
+</div>
       </div>
       <div id="activeFilters" class="tag-row"></div>
       <div id="bookCollection" class="book-grid"></div>
