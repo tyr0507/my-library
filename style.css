@@ -52,3 +52,19 @@ button,input,textarea,select{font:inherit}button{cursor:pointer}.topbar{height:7
 #readerPage[data-reader-theme="dark"] .reader-meta,#readerPage[data-reader-theme="dark"] .reader-progress{color:#b4a99c}
 @media(max-width:800px){.reader-layout{grid-template-columns:1fr;gap:25px}.reader-sidebar{border-right:0;border-bottom:1px solid var(--line);padding:0 0 20px}.reader-sidebar #readerChapterNav{display:flex;gap:7px;overflow-x:auto}.reader-chapter-link{white-space:nowrap;width:auto;flex:0 0 auto}.reader-content{padding-top:10px}}
 @media(max-width:560px){.chapter-row{align-items:flex-start;flex-direction:column}.chapter-actions{width:100%}.reader-top{align-items:flex-start;gap:12px;flex-direction:column}.reader-content h1{font-size:25px}#readerPage[data-reader-theme="warm"] .reader-content,#readerPage[data-reader-theme="dark"] .reader-content{padding:24px 18px}}
+
+.backup-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 600px) {
+  .backup-actions {
+    width: 100%;
+  }
+
+  .backup-actions button {
+    flex: 1;
+  }
+}
