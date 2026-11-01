@@ -48,7 +48,7 @@
     <section id="libraryPage" class="page protected-page">
       <div class="page-heading"><div><p class="eyebrow">MY COLLECTION</p><h1>作品庫</h1><p>整理你的故事，找到想重新閱讀的那一本。</p></div><button class="primary-button" id="newWorkButton">＋ 新增作品</button></div>
       <div class="toolbar">
-        <input id="searchInput" type="search" placeholder="搜尋作品、簡介或標籤…">
+        <input id="searchInput" type="search" placeholder="搜尋作品、簡介、標籤或正文…">
         <select id="sortSelect" aria-label="排序方式"><option value="updated">最近更新</option><option value="title">作品名稱</option><option value="words">字數由多到少</option></select>
         <div class="view-switch"><button class="selected" data-view="grid">封面</button><button data-view="list">清單</button></div>
       </div>
@@ -64,19 +64,58 @@
     </section>
 
     <section id="editorPage" class="page protected-page">
-      <div class="page-heading"><div><p class="eyebrow">WORKSPACE</p><h1>創作管理</h1><p>建立作品資料，之後可以在這裡繼續擴充章節編輯器。</p></div></div>
+      <div class="page-heading"><div><p class="eyebrow">WORKSPACE</p><h1 id="editorHeading">創作管理</h1><p>先建立作品資料，再替作品新增章節。</p></div></div>
       <form id="workForm" class="editor-form">
         <input type="hidden" id="workId">
         <label>作品名稱<input id="workTitle" required maxlength="120" placeholder="輸入作品名稱"></label>
-        <label>作品簡介<textarea id="workDescription" rows="4" placeholder="寫下一段作品簡介…"></textarea></label>
+        <label>作品簡介<textarea id="workDescription" rows="3" placeholder="寫下一段作品簡介…"></textarea></label>
         <div class="form-row">
           <label>作品狀態<select id="workStatus"><option>創作中</option><option>連載中</option><option>已完結</option><option>暫停</option></select></label>
           <label>作品分類<input id="workCategory" placeholder="例如：原創、同人"></label>
         </div>
         <label>標籤（以逗號分隔）<input id="workTags" placeholder="例如：奇幻, 武俠, 第一人稱"></label>
-        <label>正文／備註<textarea id="workBody" rows="10" placeholder="可以先放入作品內容；正式章節編輯器會在下一階段加入。"></textarea></label>
-        <div class="form-actions"><button class="primary-button" type="submit">儲存作品</button><button class="secondary-button" type="button" id="resetForm">清空</button></div>
+        <div class="form-actions"><button class="primary-button" type="submit">儲存作品資料</button><button class="secondary-button" type="button" id="resetForm">清空</button></div>
       </form>
+
+      <section id="chapterManager" class="chapter-manager" hidden>
+        <div class="section-heading"><div><p class="eyebrow">CHAPTERS</p><h2>章節管理</h2></div><button class="secondary-button" id="addChapterButton" type="button">＋ 新增章節</button></div>
+        <p class="muted-note" id="chapterWorkName"></p>
+        <div id="chapterList" class="chapter-list"></div>
+        <form id="chapterForm" class="editor-form chapter-form" hidden>
+          <input type="hidden" id="chapterId">
+          <h3 id="chapterFormHeading">新增章節</h3>
+          <label>章節標題<input id="chapterTitle" required maxlength="160" placeholder="例如：第一章　歸鄉"></label>
+          <div class="form-row">
+            <label>章節狀態<select id="chapterStatus"><option value="published">已發布</option><option value="draft">草稿</option></select></label>
+            <label>章節順序<input id="chapterOrder" type="number" min="1" step="1" value="1"></label>
+          </div>
+          <label>章節正文<textarea id="chapterBody" rows="16" placeholder="在這裡寫下章節內容…" required></textarea></label>
+          <div class="editor-tools"><span id="chapterWordCount">0 字</span><span>純文字編輯模式</span></div>
+          <div class="form-actions"><button class="primary-button" type="submit">儲存章節</button><button class="secondary-button" type="button" id="cancelChapterEdit">取消</button></div>
+        </form>
+      </section>
+    </section>
+
+    <section id="readerPage" class="page reader-page">
+      <div class="reader-top">
+        <button class="text-button" id="backToLibrary">← 返回作品庫</button>
+        <div class="reader-settings">
+          <button class="secondary-button" id="fontDown" aria-label="縮小字體">A−</button>
+          <button class="secondary-button" id="fontUp" aria-label="放大字體">A＋</button>
+          <select id="readerTheme" aria-label="閱讀背景"><option value="paper">紙張</option><option value="warm">暖色</option><option value="dark">夜間</option></select>
+        </div>
+      </div>
+      <div class="reader-layout">
+        <aside class="reader-sidebar"><p class="eyebrow">CONTENTS</p><h2 id="readerWorkTitle">作品名稱</h2><div id="readerChapterNav"></div></aside>
+        <article class="reader-content">
+          <p class="eyebrow" id="readerChapterNumber">CHAPTER</p>
+          <h1 id="readerChapterTitle">章節標題</h1>
+          <div class="reader-meta" id="readerMeta"></div>
+          <div id="readerBody" class="reader-body"></div>
+          <div class="reader-progress"><span id="progressLabel">閱讀進度 0%</span><div class="progress-track"><span id="progressBar"></span></div></div>
+          <div class="reader-pagination"><button class="secondary-button" id="previousChapter">上一章</button><button class="primary-button" id="nextChapter">下一章</button></div>
+        </article>
+      </div>
     </section>
 
     <section id="lockedNotice" class="locked-notice" hidden>
