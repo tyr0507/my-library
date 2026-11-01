@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#292827">
+  <title>LIBRARY｜私人藏書室</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="#" data-page="home">LIBRARY<span>.</span></a>
+    <nav class="main-nav" aria-label="主要導覽">
+      <button class="nav-link active" data-page="home">首頁</button>
+      <button class="nav-link protected-link" data-page="library">作品庫</button>
+      <button class="nav-link protected-link" data-page="tags">標籤</button>
+      <button class="nav-link protected-link" data-page="editor">創作管理</button>
+    </nav>
+    <div class="top-actions">
+      <button class="icon-button" id="themeToggle" title="切換明暗主題" aria-label="切換明暗主題">◐</button>
+      <button class="small-button" id="lockButton">登入</button>
+    </div>
+  </header>
+
+  <main>
+    <section id="homePage" class="page active">
+      <div class="hero">
+        <p class="eyebrow">A PRIVATE COLLECTION OF STORIES</p>
+        <h1>每一個故事，<em>都有自己的位置。</em></h1>
+        <p class="hero-copy">收藏、創作、閱讀，以及重新找到那些曾經寫下的故事。</p>
+        <div class="hero-actions">
+          <button class="primary-button protected-link" data-page="library">進入作品庫</button>
+          <button class="text-button protected-link" data-page="editor">管理我的作品 →</button>
+        </div>
+      </div>
+      <div class="stats-grid">
+        <article class="stat-card"><span>作品數量</span><strong id="homeWorkCount">0</strong></article>
+        <article class="stat-card"><span>章節數量</span><strong id="homeChapterCount">0</strong></article>
+        <article class="stat-card"><span>總字數</span><strong id="homeWordCount">0</strong></article>
+      </div>
+      <section class="section-block">
+        <div class="section-heading"><div><p class="eyebrow">YOUR SHELF</p><h2>最近更新</h2></div><button class="text-button protected-link" data-page="library">查看全部 →</button></div>
+        <div id="recentBooks" class="book-grid empty-state">登入後即可查看你的作品收藏。</div>
+      </section>
+      <p class="footnote">私人藏書室 · 只收藏故事，不急著結束。</p>
+    </section>
+
+    <section id="libraryPage" class="page protected-page">
+      <div class="page-heading"><div><p class="eyebrow">MY COLLECTION</p><h1>作品庫</h1><p>整理你的故事，找到想重新閱讀的那一本。</p></div><button class="primary-button" id="newWorkButton">＋ 新增作品</button></div>
+      <div class="toolbar">
+        <input id="searchInput" type="search" placeholder="搜尋作品、簡介或標籤…">
+        <select id="sortSelect" aria-label="排序方式"><option value="updated">最近更新</option><option value="title">作品名稱</option><option value="words">字數由多到少</option></select>
+        <div class="view-switch"><button class="selected" data-view="grid">封面</button><button data-view="list">清單</button></div>
+      </div>
+      <div id="activeFilters" class="tag-row"></div>
+      <div id="bookCollection" class="book-grid"></div>
+    </section>
+
+    <section id="tagsPage" class="page protected-page">
+      <div class="page-heading"><div><p class="eyebrow">EXPLORE BY TAG</p><h1>標籤庫</h1><p>點選標籤，查看所有使用這個標籤的作品。</p></div></div>
+      <div id="tagCollection" class="tag-cloud"></div>
+      <div class="section-heading results-heading"><h2 id="tagResultTitle">所有作品</h2><button class="text-button" id="clearTagFilter">清除篩選</button></div>
+      <div id="tagResults" class="book-grid"></div>
+    </section>
+
+    <section id="editorPage" class="page protected-page">
+      <div class="page-heading"><div><p class="eyebrow">WORKSPACE</p><h1>創作管理</h1><p>建立作品資料，之後可以在這裡繼續擴充章節編輯器。</p></div></div>
+      <form id="workForm" class="editor-form">
+        <input type="hidden" id="workId">
+        <label>作品名稱<input id="workTitle" required maxlength="120" placeholder="輸入作品名稱"></label>
+        <label>作品簡介<textarea id="workDescription" rows="4" placeholder="寫下一段作品簡介…"></textarea></label>
+        <div class="form-row">
+          <label>作品狀態<select id="workStatus"><option>創作中</option><option>連載中</option><option>已完結</option><option>暫停</option></select></label>
+          <label>作品分類<input id="workCategory" placeholder="例如：原創、同人"></label>
+        </div>
+        <label>標籤（以逗號分隔）<input id="workTags" placeholder="例如：奇幻, 武俠, 第一人稱"></label>
+        <label>正文／備註<textarea id="workBody" rows="10" placeholder="可以先放入作品內容；正式章節編輯器會在下一階段加入。"></textarea></label>
+        <div class="form-actions"><button class="primary-button" type="submit">儲存作品</button><button class="secondary-button" type="button" id="resetForm">清空</button></div>
+      </form>
+    </section>
+
+    <section id="lockedNotice" class="locked-notice" hidden>
+      <div class="lock-symbol">⌑</div><h2>這裡收藏著你的故事</h2><p>輸入密碼後即可進入私人作品空間。</p><button class="primary-button" id="unlockFromNotice">輸入密碼</button>
+    </section>
+  </main>
+
+  <div class="modal-backdrop" id="passwordModal" hidden>
+    <form class="password-card" id="passwordForm">
+      <button type="button" class="modal-close" id="closePassword" aria-label="關閉">×</button>
+      <p class="eyebrow">PRIVATE LIBRARY</p><h2>歡迎回來。</h2><p>輸入通行密碼，開啟你的私人藏書室。</p>
+      <label>通行密碼<input id="passwordInput" type="password" autocomplete="current-password" placeholder="輸入密碼" required></label>
+      <p id="passwordError" class="error-message" aria-live="polite"></p>
+      <button class="primary-button full-width" type="submit">進入藏書室</button>
+      <p class="security-note">目前是前端原型密碼門。正式上線前會改為 Supabase 登入驗證。</p>
+    </form>
+  </div>
+  <script src="js/app.js"></script>
+</body>
+</html>
