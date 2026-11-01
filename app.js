@@ -353,3 +353,113 @@ if(localStorage.getItem("library-theme")==="dark")document.body.classList.add("d
 if(isUnlocked())$("lockButton").textContent="登出";
 setReaderTheme("paper");
 renderAll();
+// ===== 資料匯出與匯入 =====
+
+// 匯出全部作品與閱讀進度
+function exportBackup() {
+  const backupData = {
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    works: works,
+    readingProgress: JSON.parse(
+      localStorage.getItem("library-reading-progress") || "{}"
+    )
+  };
+
+  const blob = new Blob(
+    [JSON.stringify(backupData, null, 2)],
+    { type: "application/json" }
+  );
+
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+
+  link.href = url;
+  link.download = `library-backup-${new Date()
+    .toISOString()
+    .slice(0, 10)}.json`;
+
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+
+  URL.revokeObjectURL(url);
+}
+
+// 點擊匯出按鈕
+$("exportBackup").addEventListener("click", exportBackup);
+
+// 點擊匯入按鈕，開啟檔案選擇器
+$("importBackupButton").addEventListener("click", () => {
+  $("importBackupInput").click();
+});
+
+// 選擇備份檔案後匯入
+$("importBackupInput").addEventListener("change", async (event) => {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  try {
+    const text = await file.text();
+    const backup = JSON.parse(text);
+
+    // 相容舊格式：直接匯出的作品陣列
+    const importedWorks = Array.isArray(backup)
+      ? backup
+      : backup.works;
+
+    if (!Array.isArray(importedWorks)) {
+      throw new Error("找不到有效的作品資料");
+    }
+
+    if (!confirm(
+      `準備匯入 ${importedWorks.length} 部作品。\n` +
+      "相同 ID 的作品將由備份版本更新，新作品會加入收藏。\n" +
+      "確定繼續嗎？"
+    )) {
+      event.target.value = "";
+      return;
+    }
+
+    // 先保留目前作品，再用備份資料更新相同 ID 的作品
+    const merged = new Map(
+      works.map(work => [work.id, work])
+    );
+
+    importedWorks.forEach(item => {
+      if (!item || typeof item !== "object") return;
+
+      const normalized = normalizeWork(item);
+      merged.set(normalized.id, normalized);
+    });
+
+    works = Array.from(merged.values());
+
+    // 還原閱讀進度
+    if (
+      backup.readingProgress &&
+      typeof backup.readingProgress === "object"
+    ) {
+      const currentProgress = JSON.parse(
+        localStorage.getItem("library-reading-progress") || "{}"
+      );
+
+      localStorage.setItem(
+        "library-reading-progress",
+        JSON.stringify({
+          ...currentProgress,
+          ...backup.readingProgress
+        })
+      );
+    }
+
+    saveWorks();
+
+    alert(`匯入完成！目前共有 ${works.length} 部作品。`);
+  } catch (error) {
+    alert("匯入失敗，請確認檔案是正確的 JSON 備份。");
+    console.error(error);
+  } finally {
+    event.target.value = "";
+  }
+});
