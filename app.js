@@ -13,7 +13,86 @@ let readerChapterId = null;
 let readerFontSize = Number(localStorage.getItem("library-reader-font") || 18);
 
 function countWords(s = "") {
-  return (String(s).match(/[\u4e00-\u9fff]|[A-Za-z0-9]+/g) || []).length;
+  const div = document.createElement("div");
+  div.innerHTML = sanitizeRichHTML(String(s));
+  const plainText = div.textContent || "";
+
+  return (plainText.match(/[\u4e00-\u9fff]|[A-Za-z0-9]+/g) || []).length;
+}
+// ===== 富文字內容處理 =====
+
+const ALLOWED_TAGS = [
+  "P", "BR", "STRONG", "B", "EM", "I", "U",
+  "H2", "H3", "BLOCKQUOTE", "UL", "OL", "LI"
+];
+
+function sanitizeRichHTML(html) {
+  const doc = new DOMParser().parseFromString(
+    String(html),
+    "text/html"
+  );
+
+  function clean(node) {
+    let result = "";
+
+    node.childNodes.forEach(child => {
+      if (child.nodeType === Node.TEXT_NODE) {
+        result += child.textContent
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;");
+        return;
+      }
+
+      if (child.nodeType !== Node.ELEMENT_NODE) return;
+
+      const tag = child.tagName;
+
+      // 不保留不允許的標籤及其內容
+      if (!ALLOWED_TAGS.includes(tag)) return;
+
+      const content = clean(child);
+
+      if (tag === "BR") {
+        result += "<br>";
+      } else {
+        const safeTag = tag.toLowerCase();
+        result += `<${safeTag}>${content}</${safeTag}>`;
+      }
+    });
+
+    return result;
+  }
+
+  return clean(doc.body);
+}
+
+// 將舊版純文字轉成段落
+function prepareEditorContent(content = "") {
+  const text = String(content);
+
+  // 判斷是否已經是富文字格式
+  if (/<\/?(p|br|strong|b|em|i|u|h2|h3|blockquote|ul|ol|li)\b/i.test(text)) {
+    return sanitizeRichHTML(text);
+  }
+
+  return text
+    .split(/\n/)
+    .map(line => `<p>${escapeHTML(line)}</p>`)
+    .join("");
+}
+
+function escapeHTML(text) {
+  return String(text)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function getChapterText() {
+  return $("chapterBody").innerHTML;
 }
 function uid(prefix = "id") { return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2,8)}`; }
 function normalizeWork(w) {
@@ -196,7 +275,7 @@ function renderChapterList() {
 }
 function openNewChapter() {
   const work = works.find(w => w.id === $("workId").value); if (!work) return;
-  $("chapterForm").reset(); $("chapterId").value = "";
+  $("chapterForm").reset(); $("chapterId").value = "";$("chapterBody").innerHTML = "";
   $("chapterOrder").value = sortedChapters(work).length + 1;
   $("chapterStatus").value = "published";
   $("chapterFormHeading").textContent = "新增章節";
@@ -207,10 +286,23 @@ function openNewChapter() {
 function editChapter(id) {
   const work = works.find(w => w.id === $("workId").value);
   const ch = work?.chapters.find(c => c.id === id); if (!ch) return;
-  $("chapterId").value = ch.id; $("chapterTitle").value = ch.title;
-  $("chapterStatus").value = ch.status; $("chapterOrder").value = ch.order;
-  $("chapterBody").value = ch.body; $("chapterFormHeading").textContent = "編輯章節";
-  updateChapterWordCount(); $("chapterForm").hidden = false;
+  $("chapterId").value = ch.id;
+$("chapterTitle").value = ch.title;
+$("chapterStatus").value = ch.status;
+$("chapterOrder").value = ch.order;
+
+// 載入目前章節原本儲存的富文字內容
+$("chapterBody").innerHTML = prepareEditorContent(ch.body);
+
+$("chapterFormHeading").textContent = "編輯章節";
+
+updateChapterWordCount();
+$("chapterForm").hidden = false;
+
+$("chapterForm").scrollIntoView({
+  behavior: "smooth",
+  block: "start"
+});
   $("chapterForm").scrollIntoView({behavior:"smooth",block:"start"});
 }
 function moveChapter(workId, chapterId, direction) {
@@ -228,7 +320,10 @@ function deleteChapter(id) {
   work.chapters.forEach((c,i) => c.order=i+1);
   work.updated=Date.now(); saveWorks(); renderChapterList();
 }
-function updateChapterWordCount() { $("chapterWordCount").textContent = `${countWords($("chapterBody").value).toLocaleString()} 字`; }
+function updateChapterWordCount() {
+  $("chapterWordCount").textContent =
+    `${countWords(getChapterText()).toLocaleString()} 字`;
+}
 
 function openReader(workId, chapterId = null) {
   if (!isUnlocked()) { showPassword(); return; }
@@ -250,8 +345,9 @@ function renderReader() {
   $("readerChapterNumber").textContent = `CHAPTER ${String(index+1).padStart(2,"0")}`;
   $("readerChapterTitle").textContent = chapter.title;
   $("readerMeta").textContent = `${work.title} · ${countWords(chapter.body).toLocaleString()} 字`;
-  $("readerBody").textContent = chapter.body;
-  $("readerBody").style.fontSize = `${readerFontSize}px`;
+$("readerBody").innerHTML = sanitizeRichHTML(
+  prepareEditorContent(chapter.body)
+);  $("readerBody").style.fontSize = `${readerFontSize}px`;
   $("previousChapter").disabled = index === 0;
   $("nextChapter").textContent = index === chapters.length-1 ? "已是最後一章" : "下一章";
   $("nextChapter").disabled = index === chapters.length-1;
@@ -307,7 +403,7 @@ $("workForm").addEventListener("submit",e=>{
 });
 $("addChapterButton").onclick=openNewChapter;
 $("cancelChapterEdit").onclick=()=>{$("chapterForm").hidden=true;};
-$("chapterBody").addEventListener("input",updateChapterWordCount);
+$("chapterBody").addEventListener("input", updateChapterWordCount);
 $("chapterForm").addEventListener("submit",e=>{
   e.preventDefault();
   const work=works.find(w=>w.id===$("workId").value); if(!work) return;
@@ -315,7 +411,7 @@ $("chapterForm").addEventListener("submit",e=>{
   const chapter={
     id,title:$("chapterTitle").value.trim(),status:$("chapterStatus").value,
     order:Math.max(1,Number($("chapterOrder").value)||1),
-    body:$("chapterBody").value,updated:Date.now()
+    body:sanitizeRichHTML(getChapterText()),updated:Date.now()
   };
   const existing=work.chapters.find(c=>c.id===id);
   if(existing) work.chapters=work.chapters.map(c=>c.id===id?chapter:c);
@@ -462,4 +558,68 @@ $("importBackupInput").addEventListener("change", async (event) => {
   } finally {
     event.target.value = "";
   }
+});
+// ===== 富文字工具列 =====
+
+// 工具列格式功能
+document.querySelectorAll(".rich-toolbar button").forEach(button => {
+  button.addEventListener("mousedown", event => {
+    event.preventDefault();
+  });
+
+  button.addEventListener("click", () => {
+    const command = button.dataset.command;
+    const editor = $("chapterBody");
+
+    editor.focus();
+
+    if (["h2", "h3", "blockquote"].includes(command)) {
+      document.execCommand("formatBlock", false, `<${command}>`);
+    } else {
+      document.execCommand(command, false, null);
+    }
+
+    updateChapterWordCount();
+  });
+});
+
+// Enter 鍵：標題、引用等格式的段落結束後，自動切換成內文
+$("chapterBody").addEventListener("keydown", event => {
+  if (event.key !== "Enter" || event.shiftKey) return;
+
+  const selection = window.getSelection();
+  if (!selection || !selection.rangeCount) return;
+
+  let node = selection.anchorNode;
+  if (node && node.nodeType === Node.TEXT_NODE) {
+    node = node.parentElement;
+  }
+
+  const block = node?.closest("h2, h3, blockquote");
+
+  if (!block || !block.contains(selection.anchorNode)) return;
+
+  // 只有游標位於該區塊最後時，才轉換成內文
+  const range = selection.getRangeAt(0);
+  const afterRange = range.cloneRange();
+  afterRange.selectNodeContents(block);
+  afterRange.setStart(range.endContainer, range.endOffset);
+
+  if (afterRange.toString().trim() !== "") return;
+
+  event.preventDefault();
+
+  const paragraph = document.createElement("p");
+  paragraph.innerHTML = "<br>";
+
+  block.after(paragraph);
+
+  const newRange = document.createRange();
+  newRange.setStart(paragraph, 0);
+  newRange.collapse(true);
+
+  selection.removeAllRanges();
+  selection.addRange(newRange);
+
+  updateChapterWordCount();
 });
