@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#292827">
   <title>LIBRARY｜私人藏書室</title>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
   <header class="topbar">
@@ -105,8 +105,36 @@
             <label>章節狀態<select id="chapterStatus"><option value="published">已發布</option><option value="draft">草稿</option></select></label>
             <label>章節順序<input id="chapterOrder" type="number" min="1" step="1" value="1"></label>
           </div>
-          <label>章節正文<textarea id="chapterBody" rows="16" placeholder="在這裡寫下章節內容…" required></textarea></label>
-          <div class="editor-tools"><span id="chapterWordCount">0 字</span><span>純文字編輯模式</span></div>
+          <div class="rich-editor-field">
+  <span class="field-title">章節正文</span>
+
+  <div class="rich-toolbar">
+    <button type="button" data-command="bold"><b>B</b></button>
+    <button type="button" data-command="italic"><i>I</i></button>
+    <button type="button" data-command="underline"><u>U</u></button>
+    <span class="toolbar-divider"></span>
+    <button type="button" data-command="h2">標題</button>
+    <button type="button" data-command="h3">小標題</button>
+    <button type="button" data-command="blockquote">引用</button>
+    <span class="toolbar-divider"></span>
+    <button type="button" data-command="insertUnorderedList">• 清單</button>
+    <button type="button" data-command="insertOrderedList">1. 編號</button>
+  </div>
+
+  <div
+    id="chapterBody"
+    class="rich-editor"
+    contenteditable="true"
+    role="textbox"
+    aria-multiline="true"
+    data-placeholder="在這裡寫下章節內容…"
+  ></div>
+
+  <div class="editor-tools">
+    <span id="chapterWordCount">0 字</span>
+    <span>富文字編輯模式</span>
+  </div>
+</div>
           <div class="form-actions"><button class="primary-button" type="submit">儲存章節</button><button class="secondary-button" type="button" id="cancelChapterEdit">取消</button></div>
         </form>
       </section>
@@ -149,6 +177,6 @@
       <p class="security-note">目前是前端原型密碼門。正式上線前會改為 Supabase 登入驗證。</p>
     </form>
   </div>
-  <script src="app.js"></script>
+  <script src="js/app.js"></script>
 </body>
 </html>
