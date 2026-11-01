@@ -1,121 +1,355 @@
-// LIBRARY prototype. Change this temporary password before testing.
-// IMPORTANT: This client-side password is only a visual gate, NOT secure authentication.
-// Before publishing, replace it with Supabase Auth + Row Level Security.
-const SITE_PASSWORD = "1133841";
+// LIBRARY v2 — local prototype with chapter-based works.
+// Change this temporary password before testing. Client-side password gates are NOT secure authentication.
+const SITE_PASSWORD = "change-this-password";
 const STORAGE_KEY = "library-prototype-works";
 const SESSION_KEY = "library-prototype-unlocked";
-
 const $ = (id) => document.getElementById(id);
+
 let currentPage = "home";
 let activeTag = "";
 let currentView = "grid";
+let readerWorkId = null;
+let readerChapterId = null;
+let readerFontSize = Number(localStorage.getItem("library-reader-font") || 18);
 
-const sampleWorks = [
-  {id:"sample-1",title:"故事的另一端",description:"一段尚未寫完的旅程。",status:"創作中",category:"原創",tags:["奇幻","原創","未完結"],body:"",updated:Date.now()-86400000},
-  {id:"sample-2",title:"月下舊夢",description:"在月色與回憶之間，尋找遺失的答案。",status:"已完結",category:"短篇",tags:["奇幻","短篇","悲劇"],body:"",updated:Date.now()-172800000}
-];
-let works = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null") || sampleWorks;
+function countWords(s = "") {
+  return (String(s).match(/[\u4e00-\u9fff]|[A-Za-z0-9]+/g) || []).length;
+}
+function uid(prefix = "id") { return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2,8)}`; }
+function normalizeWork(w) {
+  const work = {...w};
+  work.id ||= uid("work");
+  work.title ||= "未命名作品";
+  work.description ||= "";
+  work.status ||= "創作中";
+  work.category ||= "";
+  work.tags = Array.isArray(work.tags) ? work.tags : [];
+  work.updated = Number(work.updated || Date.now());
+  if (!Array.isArray(work.chapters)) {
+    const oldBody = work.body || "";
+    work.chapters = oldBody.trim() ? [{
+      id: uid("chapter"), title: "第一章", body: oldBody,
+      status: "published", order: 1, updated: work.updated
+    }] : [];
+  } else {
+    work.chapters = work.chapters.map((c, i) => ({
+      id: c.id || uid("chapter"), title: c.title || `第${i+1}章`,
+      body: c.body || "", status: c.status || "published",
+      order: Number(c.order || i+1), updated: Number(c.updated || work.updated)
+    }));
+  }
+  delete work.body;
+  return work;
+}
+function loadWorks() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
+    if (Array.isArray(raw)) return raw.map(normalizeWork);
+  } catch (e) { console.warn("作品資料讀取失敗", e); }
+  return [
+    normalizeWork({id:"sample-1",title:"故事的另一端",description:"一段尚未寫完的旅程。",status:"創作中",category:"原創",tags:["奇幻","原創","未完結"],chapters:[],updated:Date.now()-86400000}),
+    normalizeWork({id:"sample-2",title:"月下舊夢",description:"在月色與回憶之間，尋找遺失的答案。",status:"已完結",category:"短篇",tags:["奇幻","短篇","悲劇"],chapters:[],updated:Date.now()-172800000})
+  ];
+}
+let works = loadWorks();
 
-function saveWorks(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(works)); renderAll(); }
-function isUnlocked(){ return sessionStorage.getItem(SESSION_KEY) === "yes"; }
-function showPassword(){ $("passwordModal").hidden = false; $("passwordInput").focus(); }
-function hidePassword(){ $("passwordModal").hidden = true; $("passwordError").textContent = ""; }
+function saveWorks() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(works));
+  renderAll();
+}
+function sortedChapters(work, includeDrafts = true) {
+  return [...(work?.chapters || [])]
+    .filter(c => includeDrafts || c.status === "published")
+    .sort((a,b) => a.order - b.order || a.updated - b.updated);
+}
+function workWords(work) {
+  return (work.chapters || []).reduce((n,c) => n + countWords(c.body), 0);
+}
+function isUnlocked() { return sessionStorage.getItem(SESSION_KEY) === "yes"; }
+function showPassword() { $("passwordModal").hidden = false; $("passwordInput").focus(); }
+function hidePassword() { $("passwordModal").hidden = true; $("passwordError").textContent = ""; }
 
-function navigate(page){
-  if(page !== "home" && !isUnlocked()){ showPassword(); return; }
+function navigate(page) {
+  if (page !== "home" && page !== "reader" && !isUnlocked()) { showPassword(); return; }
   currentPage = page;
-  document.querySelectorAll(".page").forEach(p=>p.classList.remove("active"));
-  const target = $(page+"Page");
-  if(target) target.classList.add("active");
-  document.querySelectorAll(".nav-link").forEach(b=>b.classList.toggle("active",b.dataset.page===page));
+  document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
+  const target = $(page + "Page");
+  if (target) target.classList.add("active");
+  document.querySelectorAll(".nav-link").forEach(b => b.classList.toggle("active", b.dataset.page === page));
   $("lockedNotice").hidden = true;
-  if(page==="library") renderLibrary();
-  if(page==="tags") renderTags();
-  window.scrollTo({top:0,behavior:"smooth"});
+  if (page === "library") renderLibrary();
+  if (page === "tags") renderTags();
+  window.scrollTo({top:0, behavior:"smooth"});
 }
 
-function makeCard(work){
-  const card=document.createElement("article"); card.className="book-card";
-  const cover=document.createElement("div"); cover.className="book-cover"; cover.textContent=work.title.slice(0,1); card.appendChild(cover);
-  const info=document.createElement("div"); info.className="book-info";
-  const title=document.createElement("h3"); title.textContent=work.title; info.appendChild(title);
-  const desc=document.createElement("p"); desc.textContent=work.description||"尚未新增簡介。"; info.appendChild(desc);
-  const meta=document.createElement("div"); meta.className="book-meta"; meta.textContent=`${work.category||"未分類"} · ${work.status} · ${countWords(work.body||"")} 字`; info.appendChild(meta);
-  const tags=document.createElement("div"); tags.className="tag-row";
-  (work.tags||[]).forEach(t=>{const b=document.createElement("button");b.className="tag-chip";b.textContent="# "+t;b.onclick=()=>{activeTag=t;navigate("tags")};tags.appendChild(b)});
-  info.appendChild(tags); card.appendChild(info); return card;
-}
-function countWords(s){return (s.match(/[\u4e00-\u9fff]|[A-Za-z0-9]+/g)||[]).length}
-function renderHome(){
-  $("homeWorkCount").textContent=works.length;
-  $("homeChapterCount").textContent=0;
-  $("homeWordCount").textContent=works.reduce((n,w)=>n+countWords(w.body||""),0).toLocaleString();
-  const recent=$("recentBooks"); recent.innerHTML="";
-  if(!isUnlocked()){recent.textContent="登入後即可查看你的作品收藏。";return}
-  const items=[...works].sort((a,b)=>b.updated-a.updated).slice(0,3);
-  if(!items.length){recent.textContent="還沒有作品，進入創作管理新增第一部作品吧。";return}
-  recent.className="book-grid";items.forEach(w=>recent.appendChild(makeCard(w)));
-}
-function renderLibrary(){
-  const query=$("searchInput").value.trim().toLowerCase();
-  const sort=$("sortSelect").value;
-  let list=works.filter(w=>[w.title,w.description,w.category,(w.tags||[]).join(" "),w.body||""].join(" ").toLowerCase().includes(query));
-  if(sort==="title")list.sort((a,b)=>a.title.localeCompare(b.title,"zh-Hant"));
-  else if(sort==="words")list.sort((a,b)=>countWords(b.body||"")-countWords(a.body||""));
-  else list.sort((a,b)=>b.updated-a.updated);
-  const container=$("bookCollection");container.innerHTML="";container.className="book-grid"+(currentView==="list"?" list-view":"");
-  if(!list.length){container.textContent="沒有找到符合條件的作品。";container.classList.add("empty-state");return}
-  list.forEach(w=>container.appendChild(makeCard(w)));
-}
-function renderTags(){
-  const counts={};works.forEach(w=>(w.tags||[]).forEach(t=>counts[t]=(counts[t]||0)+1));
-  const cloud=$("tagCollection");cloud.innerHTML="";
-  Object.entries(counts).sort((a,b)=>a[0].localeCompare(b[0],"zh-Hant")).forEach(([tag,n])=>{
-    const b=document.createElement("button");b.className="tag-chip"+(activeTag===tag?" selected":"");b.textContent=`# ${tag} · ${n}`;
-    b.onclick=()=>{activeTag=tag;renderTags()};cloud.appendChild(b);
+function makeCard(work) {
+  const card = document.createElement("article");
+  card.className = "book-card";
+  const cover = document.createElement("div");
+  cover.className = "book-cover";
+  cover.textContent = (work.title || "？").slice(0,1);
+  cover.addEventListener("click", () => openReader(work.id));
+  card.appendChild(cover);
+  const info = document.createElement("div"); info.className = "book-info";
+  const title = document.createElement("h3"); title.textContent = work.title; title.tabIndex = 0;
+  title.addEventListener("click", () => openReader(work.id));
+  info.appendChild(title);
+  const desc = document.createElement("p"); desc.textContent = work.description || "尚未新增簡介。"; info.appendChild(desc);
+  const chapters = sortedChapters(work, false);
+  const meta = document.createElement("div"); meta.className = "book-meta";
+  meta.textContent = `${work.category || "未分類"} · ${work.status} · ${chapters.length} 章 · ${workWords(work).toLocaleString()} 字`;
+  info.appendChild(meta);
+  const tags = document.createElement("div"); tags.className = "tag-row";
+  (work.tags || []).forEach(t => {
+    const b = document.createElement("button"); b.className = "tag-chip"; b.textContent = "# " + t;
+    b.onclick = () => { activeTag = t; navigate("tags"); }; tags.appendChild(b);
   });
-  $("tagResultTitle").textContent=activeTag?`標籤：${activeTag}`:"所有作品";
-  const result=$("tagResults");result.innerHTML="";result.className="book-grid";
-  const filtered=activeTag?works.filter(w=>(w.tags||[]).includes(activeTag)):works;
-  if(!filtered.length){result.textContent="這個標籤目前沒有作品。";return}
-  filtered.forEach(w=>result.appendChild(makeCard(w)));
+  info.appendChild(tags);
+  const actions = document.createElement("div"); actions.className = "card-actions";
+  const read = document.createElement("button"); read.className = "text-button"; read.textContent = "開始閱讀 →";
+  read.onclick = () => openReader(work.id);
+  const edit = document.createElement("button"); edit.className = "text-button"; edit.textContent = "編輯作品";
+  edit.onclick = () => editWork(work.id);
+  actions.append(read, edit); info.appendChild(actions);
+  card.appendChild(info);
+  return card;
 }
-function renderAll(){renderHome();if(isUnlocked()){renderLibrary();renderTags()}}
-function resetForm(){
-  $("workForm").reset();$("workId").value="";
+function renderHome() {
+  $("homeWorkCount").textContent = works.length;
+  $("homeChapterCount").textContent = works.reduce((n,w) => n + sortedChapters(w,false).length, 0);
+  $("homeWordCount").textContent = works.reduce((n,w) => n + workWords(w), 0).toLocaleString();
+  const recent = $("recentBooks"); recent.innerHTML = "";
+  if (!isUnlocked()) { recent.textContent = "登入後即可查看你的作品收藏。"; return; }
+  const items = [...works].sort((a,b) => b.updated-a.updated).slice(0,3);
+  if (!items.length) { recent.textContent = "還沒有作品，進入創作管理新增第一部作品吧。"; return; }
+  recent.className = "book-grid"; items.forEach(w => recent.appendChild(makeCard(w)));
 }
-function editWork(work){
-  $("workId").value=work.id;$("workTitle").value=work.title;$("workDescription").value=work.description||"";
-  $("workStatus").value=work.status||"創作中";$("workCategory").value=work.category||"";
-  $("workTags").value=(work.tags||[]).join(", ");$("workBody").value=work.body||"";
-  navigate("editor");
+function renderLibrary() {
+  const query = $("searchInput").value.trim().toLowerCase();
+  const sort = $("sortSelect").value;
+  let list = works.filter(w => {
+    const chapterText = (w.chapters || []).map(c => c.title + " " + c.body).join(" ");
+    return [w.title,w.description,w.category,(w.tags||[]).join(" "),chapterText].join(" ").toLowerCase().includes(query);
+  });
+  if (sort === "title") list.sort((a,b) => a.title.localeCompare(b.title,"zh-Hant"));
+  else if (sort === "words") list.sort((a,b) => workWords(b)-workWords(a));
+  else list.sort((a,b) => b.updated-a.updated);
+  const container = $("bookCollection"); container.innerHTML = "";
+  container.className = "book-grid" + (currentView === "list" ? " list-view" : "");
+  if (!list.length) { container.textContent = "沒有找到符合條件的作品。"; container.classList.add("empty-state"); return; }
+  list.forEach(w => container.appendChild(makeCard(w)));
 }
-document.querySelectorAll("[data-page]").forEach(b=>b.addEventListener("click",()=>navigate(b.dataset.page)));
-$("passwordForm").addEventListener("submit",e=>{
+function renderTags() {
+  const counts = {};
+  works.forEach(w => (w.tags||[]).forEach(t => counts[t]=(counts[t]||0)+1));
+  const cloud = $("tagCollection"); cloud.innerHTML = "";
+  Object.entries(counts).sort((a,b) => a[0].localeCompare(b[0],"zh-Hant")).forEach(([tag,n]) => {
+    const b = document.createElement("button"); b.className = "tag-chip" + (activeTag===tag?" selected":"");
+    b.textContent = `# ${tag} · ${n}`; b.onclick = () => { activeTag=tag; renderTags(); }; cloud.appendChild(b);
+  });
+  $("tagResultTitle").textContent = activeTag ? `標籤：${activeTag}` : "所有作品";
+  const result = $("tagResults"); result.innerHTML = ""; result.className = "book-grid";
+  const filtered = activeTag ? works.filter(w => (w.tags||[]).includes(activeTag)) : works;
+  if (!filtered.length) { result.textContent = "這個標籤目前沒有作品。"; return; }
+  filtered.forEach(w => result.appendChild(makeCard(w)));
+}
+function renderAll() { renderHome(); if (isUnlocked()) { renderLibrary(); renderTags(); } }
+
+function resetWorkForm() {
+  $("workForm").reset(); $("workId").value = "";
+  $("chapterManager").hidden = true; $("chapterForm").hidden = true;
+  $("editorHeading").textContent = "創作管理";
+}
+function editWork(id) {
+  const work = works.find(w => w.id === id); if (!work) return;
+  $("workId").value = work.id; $("workTitle").value = work.title;
+  $("workDescription").value = work.description || ""; $("workStatus").value = work.status || "創作中";
+  $("workCategory").value = work.category || ""; $("workTags").value = (work.tags||[]).join(", ");
+  $("editorHeading").textContent = "編輯作品";
+  $("chapterManager").hidden = false; $("chapterWorkName").textContent = `目前管理：${work.title}`;
+  renderChapterList(); navigate("editor");
+}
+function renderChapterList() {
+  const work = works.find(w => w.id === $("workId").value);
+  const list = $("chapterList"); list.innerHTML = "";
+  if (!work) return;
+  const chapters = sortedChapters(work);
+  if (!chapters.length) { list.textContent = "目前還沒有章節，按「新增章節」開始建立。"; list.className = "chapter-list empty-state"; return; }
+  list.className = "chapter-list";
+  chapters.forEach(ch => {
+    const row = document.createElement("div"); row.className = "chapter-row";
+    const detail = document.createElement("div"); detail.className = "chapter-detail";
+    const name = document.createElement("strong"); name.textContent = `${ch.order}. ${ch.title}`;
+    const meta = document.createElement("span"); meta.textContent = `${ch.status==="draft"?"草稿":"已發布"} · ${countWords(ch.body).toLocaleString()} 字`;
+    detail.append(name,meta);
+    const actions = document.createElement("div"); actions.className = "chapter-actions";
+    const up = document.createElement("button"); up.className="secondary-button compact"; up.textContent="↑"; up.title="上移";
+    up.disabled = ch.order <= 1; up.onclick = () => moveChapter(work.id,ch.id,-1);
+    const down = document.createElement("button"); down.className="secondary-button compact"; down.textContent="↓"; down.title="下移";
+    down.disabled = ch.order >= chapters.length; down.onclick = () => moveChapter(work.id,ch.id,1);
+    const edit = document.createElement("button"); edit.className="secondary-button compact"; edit.textContent="編輯";
+    edit.onclick = () => editChapter(ch.id);
+    const del = document.createElement("button"); del.className="secondary-button compact danger"; del.textContent="刪除";
+    del.onclick = () => deleteChapter(ch.id);
+    actions.append(up,down,edit,del); row.append(detail,actions); list.appendChild(row);
+  });
+}
+function openNewChapter() {
+  const work = works.find(w => w.id === $("workId").value); if (!work) return;
+  $("chapterForm").reset(); $("chapterId").value = "";
+  $("chapterOrder").value = sortedChapters(work).length + 1;
+  $("chapterStatus").value = "published";
+  $("chapterFormHeading").textContent = "新增章節";
+  $("chapterWordCount").textContent = "0 字";
+  $("chapterForm").hidden = false;
+  $("chapterTitle").focus();
+}
+function editChapter(id) {
+  const work = works.find(w => w.id === $("workId").value);
+  const ch = work?.chapters.find(c => c.id === id); if (!ch) return;
+  $("chapterId").value = ch.id; $("chapterTitle").value = ch.title;
+  $("chapterStatus").value = ch.status; $("chapterOrder").value = ch.order;
+  $("chapterBody").value = ch.body; $("chapterFormHeading").textContent = "編輯章節";
+  updateChapterWordCount(); $("chapterForm").hidden = false;
+  $("chapterForm").scrollIntoView({behavior:"smooth",block:"start"});
+}
+function moveChapter(workId, chapterId, direction) {
+  const work = works.find(w => w.id === workId); if (!work) return;
+  const list = sortedChapters(work);
+  const index = list.findIndex(c => c.id === chapterId);
+  const target = index + direction; if (target < 0 || target >= list.length) return;
+  [list[index].order,list[target].order] = [list[target].order,list[index].order];
+  work.chapters = list; work.updated = Date.now(); saveWorks(); renderChapterList();
+}
+function deleteChapter(id) {
+  const work = works.find(w => w.id === $("workId").value); if (!work) return;
+  if (!confirm("確定要刪除這個章節嗎？此操作無法復原。")) return;
+  work.chapters = work.chapters.filter(c => c.id !== id);
+  work.chapters.forEach((c,i) => c.order=i+1);
+  work.updated=Date.now(); saveWorks(); renderChapterList();
+}
+function updateChapterWordCount() { $("chapterWordCount").textContent = `${countWords($("chapterBody").value).toLocaleString()} 字`; }
+
+function openReader(workId, chapterId = null) {
+  if (!isUnlocked()) { showPassword(); return; }
+  const work = works.find(w => w.id === workId); if (!work) return;
+  const chapters = sortedChapters(work,false);
+  if (!chapters.length) { alert("這部作品目前沒有已發布的章節。可以先到創作管理新增章節。"); return; }
+  readerWorkId = workId;
+  const saved = JSON.parse(localStorage.getItem("library-reading-progress") || "{}");
+  readerChapterId = chapterId || saved[workId]?.chapterId || chapters[0].id;
+  if (!chapters.some(c => c.id === readerChapterId)) readerChapterId = chapters[0].id;
+  navigate("reader"); renderReader();
+}
+function renderReader() {
+  const work = works.find(w => w.id === readerWorkId); if (!work) return;
+  const chapters = sortedChapters(work,false);
+  const index = chapters.findIndex(c => c.id === readerChapterId);
+  const chapter = chapters[index]; if (!chapter) return;
+  $("readerWorkTitle").textContent = work.title;
+  $("readerChapterNumber").textContent = `CHAPTER ${String(index+1).padStart(2,"0")}`;
+  $("readerChapterTitle").textContent = chapter.title;
+  $("readerMeta").textContent = `${work.title} · ${countWords(chapter.body).toLocaleString()} 字`;
+  $("readerBody").textContent = chapter.body;
+  $("readerBody").style.fontSize = `${readerFontSize}px`;
+  $("previousChapter").disabled = index === 0;
+  $("nextChapter").textContent = index === chapters.length-1 ? "已是最後一章" : "下一章";
+  $("nextChapter").disabled = index === chapters.length-1;
+  const nav = $("readerChapterNav"); nav.innerHTML = "";
+  chapters.forEach((c,i) => {
+    const b = document.createElement("button"); b.className = "reader-chapter-link" + (c.id===chapter.id?" active":"");
+    b.textContent = `${i+1}. ${c.title}`; b.onclick = () => { readerChapterId=c.id; renderReader(); };
+    nav.appendChild(b);
+  });
+  const progress = Math.round(((index+1)/chapters.length)*100);
+  $("progressLabel").textContent = `閱讀進度 ${progress}%`;
+  $("progressBar").style.width = `${progress}%`;
+  const store = JSON.parse(localStorage.getItem("library-reading-progress") || "{}");
+  store[workId] = {chapterId:chapter.id, progress, updated:Date.now()};
+  localStorage.setItem("library-reading-progress",JSON.stringify(store));
+}
+function setReaderTheme(value) {
+  $("readerPage").dataset.readerTheme = value;
+}
+document.querySelectorAll("[data-page]").forEach(b => b.addEventListener("click",() => navigate(b.dataset.page)));
+$("passwordForm").addEventListener("submit",e => {
   e.preventDefault();
-  if($("passwordInput").value===SITE_PASSWORD){
-    sessionStorage.setItem(SESSION_KEY,"yes");hidePassword();
-    $("lockButton").textContent="登出";navigate(currentPage==="home"?"library":currentPage);renderAll();
-  }else{$("passwordError").textContent="密碼不正確，請再試一次。";$("passwordInput").select()}
+  if ($("passwordInput").value === SITE_PASSWORD) {
+    sessionStorage.setItem(SESSION_KEY,"yes"); hidePassword(); $("lockButton").textContent="登出";
+    renderAll(); navigate(currentPage==="home"?"library":currentPage);
+  } else { $("passwordError").textContent="密碼不正確，請再試一次。"; $("passwordInput").select(); }
 });
 $("closePassword").onclick=hidePassword;
 $("unlockFromNotice").onclick=showPassword;
-$("lockButton").onclick=()=>{if(isUnlocked()){sessionStorage.removeItem(SESSION_KEY);$("lockButton").textContent="登入";navigate("home");renderHome()}else showPassword()};
-$("newWorkButton").onclick=()=>{resetForm();navigate("editor")};
-$("resetForm").onclick=resetForm;
+$("lockButton").onclick=()=>{
+  if (isUnlocked()) { sessionStorage.removeItem(SESSION_KEY); $("lockButton").textContent="登入"; navigate("home"); renderHome(); }
+  else showPassword();
+};
+$("newWorkButton").onclick=()=>{resetWorkForm();navigate("editor");};
+$("resetForm").onclick=resetWorkForm;
 $("workForm").addEventListener("submit",e=>{
   e.preventDefault();
-  const id=$("workId").value||"work-"+Date.now();
+  const id=$("workId").value || uid("work");
   const old=works.find(w=>w.id===id);
-  const work={id,title:$("workTitle").value.trim(),description:$("workDescription").value.trim(),status:$("workStatus").value,category:$("workCategory").value.trim(),tags:$("workTags").value.split(",").map(t=>t.trim()).filter(Boolean),body:$("workBody").value,updated:Date.now()};
-  if(old)works=works.map(w=>w.id===id?work:w);else works.push(work);
-  saveWorks();resetForm();navigate("library");
+  const work=normalizeWork({
+    ...(old||{}), id, title:$("workTitle").value.trim(),
+    description:$("workDescription").value.trim(), status:$("workStatus").value,
+    category:$("workCategory").value.trim(),
+    tags:$("workTags").value.split(",").map(t=>t.trim()).filter(Boolean),
+    chapters:old?.chapters||[], updated:Date.now()
+  });
+  if(old) works=works.map(w=>w.id===id?work:w); else works.push(work);
+  saveWorks();
+  $("workId").value=id; $("chapterManager").hidden=false;
+  $("chapterWorkName").textContent=`目前管理：${work.title}`;
+  $("editorHeading").textContent="編輯作品";
+  renderChapterList();
+});
+$("addChapterButton").onclick=openNewChapter;
+$("cancelChapterEdit").onclick=()=>{$("chapterForm").hidden=true;};
+$("chapterBody").addEventListener("input",updateChapterWordCount);
+$("chapterForm").addEventListener("submit",e=>{
+  e.preventDefault();
+  const work=works.find(w=>w.id===$("workId").value); if(!work) return;
+  const id=$("chapterId").value || uid("chapter");
+  const chapter={
+    id,title:$("chapterTitle").value.trim(),status:$("chapterStatus").value,
+    order:Math.max(1,Number($("chapterOrder").value)||1),
+    body:$("chapterBody").value,updated:Date.now()
+  };
+  const existing=work.chapters.find(c=>c.id===id);
+  if(existing) work.chapters=work.chapters.map(c=>c.id===id?chapter:c);
+  else work.chapters.push(chapter);
+  work.chapters.sort((a,b)=>a.order-b.order);
+  work.chapters.forEach((c,i)=>c.order=i+1);
+  work.updated=Date.now(); saveWorks(); renderChapterList();
+  $("chapterForm").hidden=true;
 });
 $("searchInput").addEventListener("input",renderLibrary);
 $("sortSelect").addEventListener("change",renderLibrary);
-document.querySelectorAll("[data-view]").forEach(b=>b.onclick=()=>{currentView=b.dataset.view;document.querySelectorAll("[data-view]").forEach(x=>x.classList.toggle("selected",x===b));renderLibrary()});
-$("clearTagFilter").onclick=()=>{activeTag="";renderTags()};
-$("themeToggle").onclick=()=>{document.body.classList.toggle("dark");localStorage.setItem("library-theme",document.body.classList.contains("dark")?"dark":"light")};
+document.querySelectorAll("[data-view]").forEach(b=>b.onclick=()=>{
+  currentView=b.dataset.view;
+  document.querySelectorAll("[data-view]").forEach(x=>x.classList.toggle("selected",x===b));
+  renderLibrary();
+});
+$("clearTagFilter").onclick=()=>{activeTag="";renderTags();};
+$("themeToggle").onclick=()=>{
+  document.body.classList.toggle("dark");
+  localStorage.setItem("library-theme",document.body.classList.contains("dark")?"dark":"light");
+};
+$("backToLibrary").onclick=()=>navigate("library");
+$("fontDown").onclick=()=>{readerFontSize=Math.max(14,readerFontSize-1);localStorage.setItem("library-reader-font",readerFontSize);renderReader();};
+$("fontUp").onclick=()=>{readerFontSize=Math.min(30,readerFontSize+1);localStorage.setItem("library-reader-font",readerFontSize);renderReader();};
+$("readerTheme").onchange=e=>setReaderTheme(e.target.value);
+$("previousChapter").onclick=()=>{
+  const list=sortedChapters(works.find(w=>w.id===readerWorkId),false);
+  const i=list.findIndex(c=>c.id===readerChapterId); if(i>0){readerChapterId=list[i-1].id;renderReader();}
+};
+$("nextChapter").onclick=()=>{
+  const list=sortedChapters(works.find(w=>w.id===readerWorkId),false);
+  const i=list.findIndex(c=>c.id===readerChapterId); if(i>=0&&i<list.length-1){readerChapterId=list[i+1].id;renderReader();}
+};
 if(localStorage.getItem("library-theme")==="dark")document.body.classList.add("dark");
 if(isUnlocked())$("lockButton").textContent="登出";
+setReaderTheme("paper");
 renderAll();
